@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Klein 4B Image-to-Image — Staging vs Production</title>
+    <title>Klein I2I — Staging vs Production (4B + 9B)</title>
     <style>
         *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -12,6 +12,22 @@
         }
         h1 { text-align: center; margin-bottom: 0.5rem; font-size: 1.8rem; padding-top: 1.5rem; }
         .subtitle { text-align: center; color: #8b949e; margin-bottom: 1.5rem; font-size: 0.95rem; line-height: 1.6; }
+        .controls {
+            text-align: center; position: sticky; top: 0; background: #0d1117;
+            padding: 0.75rem 0; z-index: 10; border-bottom: 1px solid #21262d; margin-bottom: 0;
+        }
+        .controls-row { display: flex; align-items: center; justify-content: center; gap: 0.5rem; flex-wrap: wrap; }
+        .toggle-pill {
+            display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.3rem 0.75rem;
+            border-radius: 20px; cursor: pointer; font-size: 0.85rem;
+            transition: background 0.15s, opacity 0.15s; border: 1px solid #30363d;
+            background: #21262d; margin: 0 0.15rem; user-select: none;
+        }
+        .toggle-pill:hover { background: #30363d; }
+        .toggle-pill.off { opacity: 0.35; }
+        .toggle-pill input[type="checkbox"] { display: none; }
+        .toggle-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+        .sep { width: 1px; height: 24px; background: #30363d; margin: 0 0.3rem; }
         .card {
             background: #161b22; border: 1px solid #21262d; border-radius: 8px;
             margin-bottom: 1.5rem; overflow: hidden;
@@ -37,7 +53,7 @@
         }
         .card.collapsed .card-body { display: none; }
         .card.collapsed .card-header .chevron { transform: rotate(-90deg); }
-        .images { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0; }
+        .images { display: grid; gap: 0; }
         .img-col { padding: 0.75rem; }
         .img-col:not(:last-child) { border-right: 1px solid #21262d; }
         .img-label {
@@ -50,9 +66,14 @@
         }
         .img-wrapper img {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            object-fit: contain; border-radius: 4px;
+            object-fit: contain; border-radius: 4px; opacity: 0; transition: opacity 0.3s;
         }
-        /* Lightbox */
+        .img-wrapper img.loaded { opacity: 1; }
+        .img-wrapper .placeholder {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; align-items: center; justify-content: center; color: #30363d; font-size: 0.8rem;
+        }
+        .img-wrapper img.loaded ~ .placeholder { display: none; }
         .lightbox {
             display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.92); z-index: 100; align-items: center;
@@ -67,20 +88,53 @@
             pointer-events: none;
         }
         @media (max-width: 900px) {
-            .images { grid-template-columns: 1fr; }
+            .images { grid-template-columns: 1fr !important; }
             .img-col:not(:last-child) { border-right: none; border-bottom: 1px solid #21262d; }
             body { padding: 1rem; padding-top: 0; }
         }
     </style>
 </head>
 <body>
-    <h1>Klein 4B Image-to-Image</h1>
+    <h1>Klein I2I — Staging vs Production</h1>
     <p class="subtitle">
         <strong style="color: #8b949e">Input</strong> →
-        <strong style="color: #f78166">Staging</strong> vs
-        <strong style="color: #3fb950">Production</strong>
-        &nbsp;—&nbsp; 10 edit tests &nbsp;·&nbsp; 1024×1024 &nbsp;·&nbsp; Same seeds
+        <strong style="color: #f78166">4B Staging</strong> vs
+        <strong style="color: #3fb950">4B Production</strong> vs
+        <strong style="color: #e3b341">9B Staging</strong> vs
+        <strong style="color: #a371f7">9B Production</strong>
+        &nbsp;—&nbsp; 10 edit tests &nbsp;·&nbsp; 1024×1024 &nbsp;·&nbsp; Same seeds per model
     </p>
+
+    <div class="controls">
+        <div class="controls-row">
+            <label class="toggle-pill" data-source="input">
+                <input type="checkbox" checked onchange="updateVisibility()" />
+                <span class="toggle-dot" style="background: #8b949e"></span>
+                <span style="color: #8b949e">Input</span>
+            </label>
+            <label class="toggle-pill" data-source="4b-staging">
+                <input type="checkbox" checked onchange="updateVisibility()" />
+                <span class="toggle-dot" style="background: #f78166"></span>
+                <span style="color: #f78166">4B Staging</span>
+            </label>
+            <label class="toggle-pill" data-source="4b-prod">
+                <input type="checkbox" checked onchange="updateVisibility()" />
+                <span class="toggle-dot" style="background: #3fb950"></span>
+                <span style="color: #3fb950">4B Production</span>
+            </label>
+            <label class="toggle-pill" data-source="9b-staging">
+                <input type="checkbox" onchange="updateVisibility()" />
+                <span class="toggle-dot" style="background: #e3b341"></span>
+                <span style="color: #e3b341">9B Staging</span>
+            </label>
+            <label class="toggle-pill" data-source="9b-prod">
+                <input type="checkbox" onchange="updateVisibility()" />
+                <span class="toggle-dot" style="background: #a371f7"></span>
+                <span style="color: #a371f7">9B Production</span>
+            </label>
+        </div>
+    </div>
+
     <div id="cards"></div>
 
     <div class="lightbox" id="lightbox" onclick="closeLightbox()">
@@ -90,21 +144,58 @@
 
     <script>
         const TESTS = [
-            { idx: 0, inputSeed: 100, editSeed: 200, category: "Color change", prompt: "Change the car color from red to bright blue", desc: "Red sports car on city street" },
-            { idx: 1, inputSeed: 101, editSeed: 201, category: "Add character", prompt: "Add a golden retriever sitting next to her on the bench", desc: "Woman on park bench reading" },
-            { idx: 2, inputSeed: 102, editSeed: 202, category: "Remove object", prompt: "Remove the cat from the scene", desc: "Living room with cat on rug" },
-            { idx: 3, inputSeed: 103, editSeed: 203, category: "Replace object", prompt: "Replace the red roses with bright yellow sunflowers", desc: "Table with roses, coffee, book" },
-            { idx: 4, inputSeed: 104, editSeed: 204, category: "Enhancement", prompt: "Make the image sharper and clearer with crisp details", desc: "Blurry mountain landscape" },
-            { idx: 5, inputSeed: 105, editSeed: 205, category: "Lighting change", prompt: "Change it to nighttime with warm ambient lighting and the lights on", desc: "Modern kitchen, daytime" },
-            { idx: 6, inputSeed: 106, editSeed: 206, category: "Clothing swap", prompt: "Change the white t-shirt to a black leather jacket", desc: "Man in white t-shirt" },
-            { idx: 7, inputSeed: 107, editSeed: 207, category: "Weather change", prompt: "Add a dramatic storm with dark clouds and lightning approaching from the horizon", desc: "Beach with palm tree, sunny" },
-            { idx: 8, inputSeed: 108, editSeed: 208, category: "Add detail", prompt: "Add a colorful floral pattern to the mug and fill it with steaming coffee", desc: "Plain white mug on desk" },
-            { idx: 9, inputSeed: 109, editSeed: 209, category: "Season change", prompt: "Transform this into a winter scene with snow covering everything", desc: "Summer garden with fence" },
+            { idx: 0, inputSeed: 100, edit4bSeed: 200, edit9bSeed: 300, category: "Color change", prompt: "Change the car color from red to bright blue" },
+            { idx: 1, inputSeed: 101, edit4bSeed: 201, edit9bSeed: 301, category: "Add character", prompt: "Add a golden retriever sitting next to her on the bench" },
+            { idx: 2, inputSeed: 102, edit4bSeed: 202, edit9bSeed: 302, category: "Remove object", prompt: "Remove the cat from the scene" },
+            { idx: 3, inputSeed: 103, edit4bSeed: 203, edit9bSeed: 303, category: "Replace object", prompt: "Replace the red roses with bright yellow sunflowers" },
+            { idx: 4, inputSeed: 104, edit4bSeed: 204, edit9bSeed: 304, category: "Enhancement", prompt: "Make the image sharper and clearer with crisp details" },
+            { idx: 5, inputSeed: 105, edit4bSeed: 205, edit9bSeed: 305, category: "Lighting change", prompt: "Change it to nighttime with warm ambient lighting and the lights on" },
+            { idx: 6, inputSeed: 106, edit4bSeed: 206, edit9bSeed: 306, category: "Clothing swap", prompt: "Change the white t-shirt to a black leather jacket" },
+            { idx: 7, inputSeed: 107, edit4bSeed: 207, edit9bSeed: 307, category: "Weather change", prompt: "Add a dramatic storm with dark clouds and lightning approaching from the horizon" },
+            { idx: 8, inputSeed: 108, edit4bSeed: 208, edit9bSeed: 308, category: "Add detail", prompt: "Add a colorful floral pattern to the mug and fill it with steaming coffee" },
+            { idx: 9, inputSeed: 109, edit4bSeed: 209, edit9bSeed: 309, category: "Season change", prompt: "Transform this into a winter scene with snow covering everything" },
+        ];
+
+        const SOURCES = [
+            { key: "input", label: "Input", color: "#8b949e", pathFn: t => `inputs/${pad2(t.idx)}_seed${t.inputSeed}.png` },
+            { key: "4b-staging", label: "4B Staging", color: "#f78166", pathFn: t => `staging/${pad2(t.idx)}_seed${t.edit4bSeed}.png` },
+            { key: "4b-prod", label: "4B Production", color: "#3fb950", pathFn: t => `production/${pad2(t.idx)}_seed${t.edit4bSeed}.png` },
+            { key: "9b-staging", label: "9B Staging", color: "#e3b341", pathFn: t => `staging_9b/${pad2(t.idx)}_seed${t.edit9bSeed}.png` },
+            { key: "9b-prod", label: "9B Production", color: "#a371f7", pathFn: t => `production_9b/${pad2(t.idx)}_seed${t.edit9bSeed}.png` },
         ];
 
         function pad2(n) { return String(n).padStart(2, "0"); }
         function escapeHtml(s) { const el = document.createElement("span"); el.textContent = s; return el.innerHTML; }
 
+        // Toggle pills
+        document.querySelectorAll(".toggle-pill input[type='checkbox']").forEach(cb => {
+            function sync() { cb.closest(".toggle-pill").classList.toggle("off", !cb.checked); }
+            cb.addEventListener("change", sync); sync();
+        });
+
+        function getVisibleSources() {
+            const v = [];
+            document.querySelectorAll(".toggle-pill[data-source]").forEach(p => {
+                const cb = p.querySelector("input[type='checkbox']");
+                if (cb && cb.checked) v.push(p.dataset.source);
+            });
+            return v;
+        }
+
+        function updateVisibility() {
+            document.querySelectorAll(".toggle-pill input[type='checkbox']").forEach(cb => {
+                cb.closest(".toggle-pill").classList.toggle("off", !cb.checked);
+            });
+            const visible = getVisibleSources();
+            document.querySelectorAll(".img-col[data-source]").forEach(col => {
+                col.style.display = visible.includes(col.dataset.source) ? "" : "none";
+            });
+            document.querySelectorAll(".images").forEach(g => {
+                g.style.gridTemplateColumns = `repeat(${visible.length || 1}, 1fr)`;
+            });
+        }
+
+        // Lightbox
         function openLightbox(src, label) {
             document.getElementById("lbImg").src = src;
             document.getElementById("lbLabel").innerHTML = label;
@@ -117,6 +208,7 @@
         }
         document.addEventListener("keydown", e => { if (e.key === "Escape") closeLightbox(); });
 
+        // Build cards
         const container = document.getElementById("cards");
 
         TESTS.forEach(test => {
@@ -138,15 +230,10 @@
             const grid = document.createElement("div");
             grid.className = "images";
 
-            const sources = [
-                { label: "Input", color: "#8b949e", path: `inputs/${pad2(test.idx)}_seed${test.inputSeed}.png` },
-                { label: "Staging", color: "#f78166", path: `staging/${pad2(test.idx)}_seed${test.editSeed}.png` },
-                { label: "Production", color: "#3fb950", path: `production/${pad2(test.idx)}_seed${test.editSeed}.png` },
-            ];
-
-            sources.forEach(src => {
+            SOURCES.forEach(src => {
                 const col = document.createElement("div");
                 col.className = "img-col";
+                col.dataset.source = src.key;
 
                 const label = document.createElement("div");
                 label.className = "img-label";
@@ -156,15 +243,24 @@
 
                 const wrapper = document.createElement("div");
                 wrapper.className = "img-wrapper";
+
                 const img = document.createElement("img");
                 img.loading = "lazy";
-                img.src = src.path;
+                img.src = src.pathFn(test);
                 img.alt = `${src.label} — Test ${test.idx + 1}`;
+                img.addEventListener("load", () => img.classList.add("loaded"));
                 img.addEventListener("click", e => {
                     e.stopPropagation();
-                    openLightbox(src.path, `<strong style="color:${src.color}">${src.label}</strong> · #${test.idx + 1} ${test.category}`);
+                    openLightbox(src.pathFn(test),
+                        `<strong style="color:${src.color}">${src.label}</strong> · #${test.idx + 1} ${test.category}`);
                 });
+
+                const placeholder = document.createElement("div");
+                placeholder.className = "placeholder";
+                placeholder.textContent = "Loading…";
+
                 wrapper.appendChild(img);
+                wrapper.appendChild(placeholder);
                 col.appendChild(wrapper);
                 grid.appendChild(col);
             });
@@ -173,6 +269,8 @@
             card.appendChild(body);
             container.appendChild(card);
         });
+
+        updateVisibility();
     </script>
 </body>
 </html>
